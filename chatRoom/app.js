@@ -10,14 +10,13 @@ app.get('/', function (req, res) {
   res.sendfile(__dirname + '/index.html');
 });
 
+// Heroku doesn't support websockets yet.
 io.configure(function () { 
   io.set("transports", ["xhr-polling"]); 
-  io.set("polling duration", 10); 
+  io.set("polling duration", 5);
 });
 
-io.sockets.on('connection', function (socket) {  
-  socket.emit('enter', { id: socket.id });
-
+io.sockets.on('connection', function (socket) {
   socket.on('setNickname', function (name) {
     socket.set('nickname', name, function () {      
       socket.emit('ready');
