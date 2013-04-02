@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width,user-scalable=no"/>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/jquery-1.7.2.min.js"></script>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+    var socket = io.connect('http://192.168.196.95:3000');
+
+    socket.on('init', function (initData) {
+        var screen = document.getElementById('screen');
+        screen.width = initData.width;
+        screen.height = initData.height;
+        var ctx = screen.getContext('2d');
+
+        socket.on('rect', function (rectData) {
+            console.log('x: %s, y: %s, w: %s, h: %s', rectData.x, rectData.y, rectData.w, rectData.h);
+
+            var imgData = ctx.createImageData(rectData.w, rectData.h);
+            var i = 0;
+            rectData.pixels.forEach(function (line) {
+                line.forEach(function (rgb) {
+                    imgData.data[i] = rgb[0];
+                    imgData.data[i + 1] = rgb[1];
+                    imgData.data[i + 2] = rgb[2];
+                    imgData.data[i + 3] = 255;
+                    i = i + 4;
+                });
+            });
+
+            ctx.putImageData(imgData, rectData.x, rectData.y);
+        });
+    });
+</script>
+</body>
+<html>
