@@ -8,7 +8,7 @@
 <body>
 <canvas id="screen"></canvas>
 <script>
-    var socket = io.connect('http://192.168.196.95:3000');
+    var socket = io.connect('http://' + window.location.host);
 
     socket.on('init', function (initData) {
         var screen = document.getElementById('screen');
@@ -17,8 +17,6 @@
         var ctx = screen.getContext('2d');
 
         socket.on('rect', function (rectData) {
-            console.log('x: %s, y: %s, w: %s, h: %s', rectData.x, rectData.y, rectData.w, rectData.h);
-
             var imgData = ctx.createImageData(rectData.w, rectData.h);
             var i = 0;
             rectData.pixels.forEach(function (line) {
@@ -32,6 +30,10 @@
             });
 
             ctx.putImageData(imgData, rectData.x, rectData.y);
+        });
+
+        socket.on('disconnect', function () {
+            console.log('disconnected');
         });
     });
 </script>

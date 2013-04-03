@@ -1,8 +1,12 @@
 var util = require('util');
+var events = require('events');
 var net = require('net');
 var des = require('des');
 
-const STATE_HANDSHAKE = 0,
+module.exports = VNCClient;
+
+// Constants.
+var STATE_HANDSHAKE = 0,
     STATE_AUTH = 1,
     STATE_AUTH_VNC = 2,
     STATE_AUTH_RES = 3,
@@ -10,42 +14,29 @@ const STATE_HANDSHAKE = 0,
     STATE_MSG = 5,
     STATE_RECTANGLES = 6;
 
-const MSG_FRAMEBUFFER_UPDATE = 0;
+var MSG_FRAMEBUFFER_UPDATE = 0,
+    MSG_Server_CutText = 3;
 
-const ENCODING_RAW = 0,
+var CMD_SET_ENCODINGS = 2,
+    CMD_FRAMEBUFFER_UPDATE_REQUEST = 3;
+
+var ENCODING_RAW = 0,
     ENCODING_COPY_RECT = 1;
 
-
-function parsePixelFormat(buf) {
-    return {
-        bpp: buf.readUInt8(0),
-        depth: buf.readUInt8(1),
-        bigEndian: buf.readUInt8(2),
-        trueColor: buf.readUInt8(3),
-        rMax: buf.readUInt16BE(4),
-        gMax: buf.readUInt16BE(6),
-        bMax: buf.readUInt16BE(8),
-        rShift: buf.readUInt8(10),
-        gShift: buf.readUInt8(11),
-        bShift: buf.readUInt8(12)
-    };
-}
-
-
-function VNCClient(host, display, password) {
+function VNCClient(host, password) {
     this.password = password;
-    this.socket = net.createConnection((display || 0) + 5900, host);
+    this.socket = net.createConnection(5900, host);
     this.recvBuf = new Buffer(0);
     this.socket.on('connect', this.onConnect.bind(this));
     this.socket.on('data', this.onData.bind(this));
     this.socket.on('close', this.onClose.bind(this));
 }
-util.inherits(VNCClient, process.EventEmitter);
-exports.VNCClient = VNCClient;
+util.inherits(VNCClient, events.EventEmitter);
 
 VNCClient.prototype.error = function (message) {
-    if (this.socket.writable)
+    if (this.socket.writable) {
         this.socket.end();
+    }
 
     this.emit('error', new Error(message));
 };
@@ -71,7 +62,6 @@ VNCClient.prototype.onClose = function () {
 };
 
 VNCClient.prototype.onData = function (data) {
-    //console.log('data:', data);
     if (data) {
         var recvBuf = new Buffer(this.recvBuf.length + data.length);
         this.recvBuf.copy(recvBuf);
@@ -89,7 +79,9 @@ VNCClient.prototype.onData = function (data) {
                 if ((m = s.match(/^RFB (\d\d\d)\.(\d\d\d)/))) {
                     var maj = parseInt(m[1], 10);
                     var min = parseInt(m[2], 10);
+
                     console.log("Server speaks " + maj + "." + min);
+
                     if (maj >= 3 && min >= 3) {
                         this.version = [maj, min];
                         this.socket.write("RFB 003.003\n");
@@ -106,7 +98,7 @@ VNCClient.prototype.onData = function (data) {
             if (this.recvBuf.length >= 4) {
                 var secType = this.recvBuf.slice(0, 4).readUInt32BE(0);
                 this.recvBuf = this.recvBuf.slice(4);
-                console.log('secType: %d', secType);
+
                 var noAuth = false, vncAuth = false;
                 switch (secType) {
                     case 1:
@@ -117,8 +109,7 @@ VNCClient.prototype.onData = function (data) {
                         break;
                 }
                 if (noAuth) {
-                    this.socket.write(new Buffer([1]));
-                    this.state = STATE_INIT;
+                    this.initClient();
                 } else if (vncAuth) {
                     if (typeof this.password === 'string') {
                         this.socket.write(new Buffer([2]));
@@ -127,7 +118,7 @@ VNCClient.prototype.onData = function (data) {
                         this.error("Password required");
                     }
                 } else {
-                    this.error("VNC Authentication not offered");
+                    this.error("VNC authentication not offered");
                 }
             }
             break;
@@ -146,8 +137,7 @@ VNCClient.prototype.onData = function (data) {
                 var ok = this.recvBuf[3] === 0;
                 this.recvBuf = this.recvBuf.slice(4);
                 if (ok) {
-                    this.socket.write(new Buffer([1]));
-                    this.state = STATE_INIT;
+                    this.initClient();
                 } else {
                     this.error("Authentication failure");
                 }
@@ -170,7 +160,8 @@ VNCClient.prototype.onData = function (data) {
                         name: this.name,
                         pixelFormat: this.pixelFormat
                     });
-                    console.log('name: %s', this.name);
+
+                    this.setEncodings();
                 }
             }
             break;
@@ -186,12 +177,11 @@ VNCClient.prototype.onData = function (data) {
                             this.onData();
                         }
                         break;
-                    case 3:
+                    case MSG_Server_CutText:
                         var txtLen = this.recvBuf.readUInt32BE(4);
                         if (this.recvBuf.length >= 8 + txtLen) {
                             var txt = this.recvBuf.slice(8, 8 + txtLen);
                             this.recvBuf = this.recvBuf.slice(8 + txtLen);
-                            console.log('cut text: %s', txt + '');
                         }
                         break;
                     default:
@@ -279,10 +269,29 @@ VNCClient.prototype.onRectangle = function (x, y, w, h, encoding, data) {
     });
 };
 
+VNCClient.prototype.initClient = function () {
+    // Share desktop among multiple clients
+    this.socket.write(new Buffer([1]));
+    this.state = STATE_INIT;
+};
+
+VNCClient.prototype.setEncodings = function () {
+    // Tell the server we support both RAW and CopyRect encoding formats.
+    var b = new Buffer(12);
+    b[0] = CMD_SET_ENCODINGS;
+    b[1] = 0;
+    b.writeUInt16BE(2, 2);
+    b.writeUInt32BE(ENCODING_COPY_RECT, 4);
+    b.writeUInt32BE(ENCODING_RAW, 8);
+
+    this.socket.write(b);
+};
+
 VNCClient.prototype.requestUpdate = function (x, y, w, h) {
     var b = new Buffer(10);
-    b[0] = 3;
-    b[1] = 0;
+    b[0] = CMD_FRAMEBUFFER_UPDATE_REQUEST;
+    // Use incremental update.
+    b[1] = 1;
     b.writeUInt16BE(x, 2);
     b.writeUInt16BE(y, 4);
     b.writeUInt16BE(w, 6);
@@ -290,4 +299,23 @@ VNCClient.prototype.requestUpdate = function (x, y, w, h) {
     return this.socket.write(b);
 };
 
-module.exports = VNCClient;
+VNCClient.prototype.end = function () {
+    if (this.socket.writable) {
+        this.socket.end();
+    }
+};
+
+function parsePixelFormat(buf) {
+    return {
+        bpp: buf.readUInt8(0),
+        depth: buf.readUInt8(1),
+        bigEndian: buf.readUInt8(2),
+        trueColor: buf.readUInt8(3),
+        rMax: buf.readUInt16BE(4),
+        gMax: buf.readUInt16BE(6),
+        bMax: buf.readUInt16BE(8),
+        rShift: buf.readUInt8(10),
+        gShift: buf.readUInt8(11),
+        bShift: buf.readUInt8(12)
+    };
+}
