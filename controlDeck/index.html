@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta name="viewport" content="width=device-width,user-scalable=no" />
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/jquery-1.7.2.min.js"></script>
+</head>
+<body>
+<input id="btnPrev" type="button" value="<<" disabled="disabled" action="prev" style="width: 100%; height: 60px;" /><br /><br />
+<input id="btnNext" type="button" value=">>"  disabled="disabled" action="next" style="width: 100%; height: 60px;" /><br /><br />
+<input id="btnMenu" type="button" value="M"  disabled="disabled" action="toggleMenu" style="width: 100%; height: 60px;" />
+<script>
+    var socket = io.connect('http://controlDeck.herokuapp.com:80');
+    socket.emit('register', { role: 'controller', deckId: window.location.hash.slice(1) });
+    socket.on('ready', function (failReason) {
+        if (failReason) {
+            alert(failReason);
+            return;
+        }
+
+        $('input').click(function () {
+            socket.emit('control', { action: $(this).attr('action') });
+        }).removeAttr('disabled');
+
+        socket.on('disconnect', function () {
+            alert('disconnected');
+            $('input').attr('disabled', 'disabled');
+        });
+    });
+</script>
+</body>
+</html>

@@ -10,13 +10,13 @@
 		Set your nickname: <input id="txtNickname" type="text" /> <input id="btnEnter" type="button" value="enter" />
 	</div>
 	<div id="chatRoom" style="display: none;">
-	  <div id="display" style="height: 360px; border: solid 2px green; padding: 10px;"></div>
-	  <span id="nickname" style="width: 14%;"></span>: 
-	  <input id="txtSend" type="text" style="width: 70%;" />
-	  <input id="btnSend" type="button" value="Send" style="width: 14%; float: right;" />
+	  <div id="display" style="height: 260px; border: solid 2px green; padding: 10px;"></div>
+	  <span id="nickname"></span>: <br />
+	  <input id="txtSend" type="text" style="width: 99%;" /><br />
+	  <input id="btnSend" type="button" value="Send" style="width: 100%; float: right;" />
 	</div>
 	<script>
-	  var socket = io.connect('http://chatroomdemo.herokuapp.com');    
+	  var socket = io.connect('http://' + window.location.host);
 
 	  $('#btnEnter').click(function () {
 		var nickname = $('#txtNickname').val();
