@@ -1,0 +1,19 @@
+Hi, {{username}}
+
+<h3>Online Users:</h3>
+<ul>
+	<li ng-repeat='user in users'>{{user.username}}</li>
+</ul>
+
+<h3>Todos:</h3>
+<ul>
+  <li ng-repeat='todo in todos'>{{todo.content}}</li>
+</ul>
+
+<input type="text" ng-model="newTodo_content" />
+<input type="button" ng-click="addTodo()" value="Add" />
+
+<h3>Activities</h3>
+<ul>
+  <li ng-repeat="activity in activities">{{activity}}</li>
+</ul>
